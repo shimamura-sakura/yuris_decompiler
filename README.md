@@ -14,3 +14,16 @@ not thourougly tested, but I guess it works
 - the official example from version 0.488_19, 0.488_20, 0.494_30a
 - 夏空あすてりずむ (dlsite RJ367965)  
     I don't know why but in the same run, each time I return to title and start, it begins from a different position in the game
+
+## Limitations
+
+- no variable names (not saved)
+- no macro (expanded during compilation)
+- currently, all globals go into one data/script/global.yst  
+    theoretically it is possible to split them into their respective files, but it just works now.
+
+## Thank You
+
+- file format: [arcusmaximus/VNTranslationTools](https://github.com/arcusmaximus/VNTranslationTools/blob/main/VNTextPatch.Shared/Scripts/Yuris/Notes.txt)
+- ysvr >v455: [1F1E33-float32/Tools](https://github.com/1F1E33-float32/Tools/blob/main/VisualNovel/Engine/YuRis/decompiler/ysvr.py#L72)
+- many others which I don't remember exactly, see my starts maybe

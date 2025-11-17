@@ -19,7 +19,6 @@ def disasm(idir: str, odir: str, yscd: YSCD, key: int, renc: str, wenc: str):
     with open(path.join(odir, 'data/script/global.yst'), 'w',
               encoding=wenc, newline='\r\n') as ft:
         ysvr_global(yenv, ysvr, ft, renc)
-        # return
     # 2. get labels
     lbls: dict[int, list[Lbl]] = {}
     for scr in ystl.scrs:
@@ -28,16 +27,17 @@ def disasm(idir: str, odir: str, yscd: YSCD, key: int, renc: str, wenc: str):
         lbls[lbl.scr_id].append(lbl)
     # 3. disasm script files (yst%>05d.ybn) -> {path}.yst
     for scr in ystl.scrs:
-        if scr.nvar < 0:
-            continue
-        with open(path.join(idir, f'yst{scr.id:0>5}.ybn'), 'rb') as fp:
-            ystb = YSTB(fp, key, renc)
         out_path = path.join(odir, scr.path.replace('\\', '/'))
         makedirs(path.dirname(out_path), exist_ok=True)
-        print(scr.id, out_path)
-        with open(out_path, 'w', encoding=wenc, newline='\r\n') as ft:
-            do_ystb(yenv, yscd, ystb, lbls[scr.id], ft, renc)
-        # break
+        if scr.nvar < 0:
+            print(scr.id, out_path, '- empty')
+            open(out_path, 'w', encoding=wenc, newline='\r\n').close()
+        else:
+            print(scr.id, out_path)
+            with open(path.join(idir, f'yst{scr.id:0>5}.ybn'), 'rb') as fp:
+                ystb = YSTB(fp, key, renc)
+            with open(out_path, 'w', encoding=wenc, newline='\r\n') as ft:
+                do_ystb(yenv, yscd, ystb, lbls[scr.id], ft, renc)
 
 
 def ysvr_global(yenv: YEnv, ysvr: YSVR, f: TextIOBase, enc: str):

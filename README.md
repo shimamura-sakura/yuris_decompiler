@@ -4,6 +4,8 @@ A decompiler for the YU-RIS visual novel engine.
 (No YPF extraction tool here, you can use others' tool for that)  
 (re)compile(decompile(original)) is almost identical to original  
 
+Note: I messed up with relative import, if you got import errors, remove that dot
+
 ## Usage
 
 see [example_usage.py](example_usage.py)

@@ -1,7 +1,7 @@
 #!/bin/env python3
 import sys
-import yuris_dump as Ydmp
-import yuris_disasm as Ydis
+import .yuris_dump as Ydmp
+import .yuris_disasm as Ydis
 renc = Ydis.ENC
 wenc = Ydis.ENC
 key = Ydis.YSTB_DEFAULT_KEY

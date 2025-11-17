@@ -1,7 +1,7 @@
 #!/bin/env python3
-from yuris import *
 from sys import stdout
 from io import TextIOBase
+from .yuris import *
 
 
 def run(fdr: str, f: TextIOBase, enc: str):

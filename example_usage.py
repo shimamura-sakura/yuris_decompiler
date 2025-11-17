@@ -1,6 +1,6 @@
 #!/bin/env python3
-import yuris_dump as Ydmp
-import yuris_disasm as Ydis
+import .yuris_dump as Ydmp
+import .yuris_disasm as Ydis
 renc = Ydis.ENC  # shift-jis
 wenc = Ydis.ENC  # shift-jis, would anyone ever use other?
 key = Ydis.YSTB_DEFAULT_KEY  # 0xD36FAC96

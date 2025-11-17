@@ -2,7 +2,7 @@
 from sys import stdout
 from io import TextIOBase
 from os import path, makedirs
-from yuris import *
+from .yuris import *
 
 
 def disasm(idir: str, odir: str, yscd: YSCD, key: int, renc: str, wenc: str):

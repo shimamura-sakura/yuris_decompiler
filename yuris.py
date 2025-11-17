@@ -226,19 +226,18 @@ class YSTL:
         self.scrs = [Scr(r) for _ in range(nscr)]
 
 
-TArg = Struct('<4B2I')
+TArg = Struct('<HBB2I')
 
 
 class Arg:
     id: int
-    fl: int
     typ: int
     ari: int
     len: int
     off: int
 
     def __init__(self, r: Rdr):
-        self.id, self.fl, self.typ, self.ari, self.len, self.off = r.unpack(TArg)
+        self.id, self.typ, self.ari, self.len, self.off = r.unpack(TArg)
 
 
 TCmd = Struct('<BBH')
@@ -296,20 +295,27 @@ class YSTB:
 
 
 TVar454 = Struct('<BHHBB')
-TVar455 = Struct('<BxHHBB')
+TVar455 = Struct('<BBHHBB')
 
 
 class Var:
     scope: int
+    g: int
     scr_id: int
     var_id: int
     dim: list[int]
     typ: int
     val: None | int | float | bytes
 
-    def __init__(self, r: Rdr, t: Struct):
-        self.scope, self.scr_id, self.var_id, self.typ, ndim = r.unpack(t)
+    def __init__(self, r: Rdr, v: int):
+        if v > 454:
+            self.scope, self.g, self.scr_id, self.var_id, self.typ, ndim = r.unpack(TVar455)
+        else:
+            self.scope, self.scr_id, self.var_id, self.typ, ndim = r.unpack(TVar454)
+            self.g = 1
         self.dim = [r.ui(4) for _ in range(ndim)]
+        assert 1 <= self.scope <= 3  # 1:g 2:s 3:f
+        assert self.scope == 1 or self.g == 1, f'scope={self.scope}, g={self.g}'
         match (typ := self.typ):
             case 0: self.val = None
             case 1: self.val = r.si(8)
@@ -329,9 +335,9 @@ class YSVR:
 
     def __init__(self, r: Rdr):
         assert r.read(4) == b'YSVR'
-        self.ver, nvar = r.unpack(Tysvr)
-        t = TVar455 if self.ver > 454 else TVar454
-        self.vars = [Var(r, t) for _ in range(nvar)]
+        ver, nvar = r.unpack(Tysvr)
+        self.ver = ver
+        self.vars = [Var(r, ver) for _ in range(nvar)]
 
 
 class DArg:

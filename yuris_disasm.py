@@ -54,11 +54,12 @@ def disasm(idir: str, odir: str, yscd: YSCD, key: int, renc: str, wenc: str):
 def ysvr_global(yenv: YEnv, ysvr: YSVR, enc: str):
     lines: list[str] = []
     com_vars = yenv.com_vars
+    cmd_suf = [None, '', '2', '3', '4']  # G_xxx, x2, x3, x4
     cmd_name = {1: 'G_INT', 2: 'G_FLT', 3: 'G_STR'}
     for v in ysvr.vars:
         if (v.var_id in com_vars) or (v.scope != 1) or (v.typ == 0):
             continue  # compiler, non-global or non-existent
-        var_cmd = cmd_name[v.typ]
+        var_cmd = cmd_name[v.typ]+cmd_suf[v.g]
         var_def = yenv.fmt_var(v.var_id, v.typ)
         var_dim = f'({','.join(map(str, v.dim))})' if len(v.dim) else ''
         match v.typ:
@@ -92,7 +93,7 @@ ASSIGN = {
     'G_INT', 'G_STR', 'G_FLT',
     'F_INT', 'F_STR', 'F_FLT'}
 ARI = {0: '=', 1: '+=', 2: '-=', 3: '*=', 4: '/=', 5: '%=', 6: '&=', 7: '|=', 8: '^='}
-SKIP = {'IFBLEND': 0, 'RETURNCODE': 1}
+SKIP = {'IFBLEND': 0}
 
 
 def do_ystb(yenv: YEnv, yscd: YSCD, ystb: YSTB, lbls: list[Lbl], vinits: TVInits, f: TextIOBase, enc: str):
@@ -108,6 +109,7 @@ def do_ystb(yenv: YEnv, yscd: YSCD, ystb: YSTB, lbls: list[Lbl], vinits: TVInits
     # 2. iterate through commands
     nline = max(map(lambda c: c.line_no, ystb.cmds))
     lines: list[list[str] | bool] = [False] * nline
+    preps: list[str] = []  # pending RETURNCODE->PREP, i guess
     for pc, (lbls, cmd) in enumerate(zip(pc_lbls, ystb.cmds)):
         # 1. create line and write labels (preferably into prev line)
         line = lines[iline := cmd.line_no-1]
@@ -122,6 +124,10 @@ def do_ystb(yenv: YEnv, yscd: YSCD, ystb: YSTB, lbls: list[Lbl], vinits: TVInits
         if not line:
             line = lines[iline] = []
         # 2. write current command
+        if len(preps):
+            # サウンド機能.txt: PREP actually on L79 but RETURNCODE on L77
+            line.extend(preps)
+            preps.clear()
         cmd_desc = yscd.cmds[cmd.code]
         cmd_name = cmd_desc.name
         narg = len(args := cmd.args)
@@ -141,6 +147,20 @@ def do_ystb(yenv: YEnv, yscd: YSCD, ystb: YSTB, lbls: list[Lbl], vinits: TVInits
                 else:
                     cond = fmt_exp(yenv, args[0], exp_data, True, enc)
                     line.append(f'LOOP[SET={cond}]')
+            case 'RETURNCODE':
+                assert narg == 1
+                rc = args[0]
+                assert rc.typ == rc.ari == rc.off == 0, str(rc.__dict__)
+                match rc.len:
+                    case 0: pass
+                    case 1: preps.append('PREP[TEXTVAL=1]')
+                    case x: assert False, f'unknown RETURNCODE {x}'
+            case 'WORD':
+                assert len(args) == 1
+                w = args[0]
+                assert len(word := exp_data[w.off:w.off+w.len]) == w.len
+                line.append(word.decode(enc))
+            case 'END' if pc+1 == len(ystb.cmds): assert narg == 0
             case x if x in ASSIGN:  # ASSIGN: lhs ?= rhs
                 assert narg == 2
                 lhs = fmt_exp(yenv, args[0], exp_data, True, enc)
@@ -160,12 +180,6 @@ def do_ystb(yenv: YEnv, yscd: YSCD, ystb: YSTB, lbls: list[Lbl], vinits: TVInits
                         line.append(f'{x}[{lhs}={rhs}]')
                 else:
                     line.append(f'{lhs}{ARI[args[0].ari]}{rhs}')
-            case 'WORD':
-                assert len(args) == 1
-                w = args[0]
-                assert len(word := exp_data[w.off:w.off+w.len]) == w.len
-                line.append(word.decode(enc))
-            case 'END' if pc+1 == len(ystb.cmds): assert narg == 0
             case _:
                 cmd_segs: list[str] = []
                 des_args = cmd_desc.args

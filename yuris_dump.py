@@ -37,8 +37,8 @@ def do_ystb(yscd: YSCD, ystb: YSTB, f: TextIOBase, enc: str):
         l.append(f'PC={pc} L={cmd.line_no} {cmd_desc.name} narg={len(cmd.args)}\n')
         match cmd_name:
             case 'RETURNCODE':
-                assert narg == 1 and args[0].off == 0  # why .len differs?
-                l.append(f'- code: id={args[0].id} fl={args[0].fl} typ={args[0].typ} ari={args[0].ari}\n')
+                assert narg == 1 and args[0].off == 0
+                l.append(f'- code: {do_arg(args[0], exp_data, False, False, enc)}\n')
             case 'IF' | 'ELSE' if narg == 3:
                 assert narg == 3
                 l.append(f'- cond: {do_arg(args[0], exp_data, True, True, enc)}\n')
@@ -49,9 +49,11 @@ def do_ystb(yscd: YSCD, ystb: YSTB, f: TextIOBase, enc: str):
                 l.append(f'- cond: {do_arg(args[0], exp_data, True, True, enc)}\n')
                 l.append(f'- loop: {do_arg(args[1], exp_data, False, False, enc)}\n')
             case x if x in ASSIGN:
+                assert narg == 2
                 l.append(f'- lhs: {do_arg(args[0], exp_data, True, True, enc)}\n')
                 l.append(f'- rhs: {do_arg(args[1], exp_data, True, True, enc)}\n')
             case 'WORD':
+                assert narg == 1
                 l.append(do_arg(args[0], exp_data, False, True, enc)+'\n')
             case _:
                 des_args = cmd_desc.args
@@ -63,7 +65,7 @@ def do_ystb(yscd: YSCD, ystb: YSTB, f: TextIOBase, enc: str):
 
 
 def do_arg(arg: Arg, exp_data: bytes, force_exp: bool, disasm: bool, enc: str):
-    k0 = f'id={arg.id} fl={arg.fl} typ={arg.typ} ari={arg.ari} off={arg.off} len={arg.len}'
+    k0 = f'id={arg.id} typ={arg.typ} ari={arg.ari} off={arg.off} len={arg.len}'
     if not disasm:
         return k0
     assert len(raw_data := exp_data[arg.off:arg.off+arg.len]) == arg.len

@@ -10,11 +10,12 @@ see [example_usage.py](example_usage.py)
 
 ## Tested on
 
-not thourougly tested, but I guess it works
-
-- the official example from version 0.488_19, 0.488_20, 0.494_30a
+- the official example from version 0.488_19
 - 夏空あすてりずむ (dlsite RJ367965)  
-    I don't know why but in the same run, each time I return to title and start, it begins from a different position in the game
+
+now, for these two, recompile(decompile(original)) == original  
+except yst_list.ybn due to stored modification time.  
+you can use diff_official_bin.sh and diff_natsu_bin.sh to test this
 
 ## Limitations
 

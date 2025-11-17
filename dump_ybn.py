@@ -5,6 +5,11 @@ from io import TextIOBase
 
 
 def run(fdr: str, f: TextIOBase, enc: str):
+    with open(fdr+'/yscfg.ybn', 'rb') as fp:
+        y = YSCF(Rdr(fp.read(), enc))
+        f.write('- yscfg.ybn -\n')
+        for k in sorted(y.__dict__.keys()):
+            f.write(f'{k}: {getattr(y, k)}\n')
     with open(fdr+'/ysl.ybn', 'rb') as fp:
         y = YSLB(Rdr(fp.read(), enc))
         f.write('- ysl.ybn -\n')

@@ -15,10 +15,8 @@ def disasm(idir: str, odir: str, yscd: YSCD, key: int, renc: str, wenc: str):
         ystl = YSTL(Rdr(fp.read(), renc))
     # 1. create env, define global variables -> global.yst
     yenv = YEnv(yscd, ysvr)
-    makedirs(path.join(odir, 'data/script'), exist_ok=True)
-    with open(path.join(odir, 'data/script/global.yst'), 'w',
-              encoding=wenc, newline='\r\n') as ft:
-        ysvr_global(yenv, ysvr, ft, renc)
+    vinits = ysvr_varinits(yenv, ysvr, renc)
+    glbs: list[str] | None = ysvr_global(yenv, ysvr, renc)
     # 2. get labels
     lbls: dict[int, list[Lbl]] = {}
     for scr in ystl.scrs:
@@ -30,17 +28,31 @@ def disasm(idir: str, odir: str, yscd: YSCD, key: int, renc: str, wenc: str):
         out_path = path.join(odir, scr.path.replace('\\', '/'))
         makedirs(path.dirname(out_path), exist_ok=True)
         if scr.nvar < 0:
-            print(scr.id, out_path, '- empty')
-            open(out_path, 'w', encoding=wenc, newline='\r\n').close()
+            with open(out_path, 'w', encoding=wenc, newline='\r\n') as ft:
+                if glbs:
+                    print(scr.id, out_path, '- empty, we put globals here')
+                    ft.writelines(glbs)
+                    glbs = None
+                else:
+                    print(scr.id, out_path, '- empty')
+                    ft.write(';')
         else:
             print(scr.id, out_path)
             with open(path.join(idir, f'yst{scr.id:0>5}.ybn'), 'rb') as fp:
                 ystb = YSTB(fp, key, renc)
             with open(out_path, 'w', encoding=wenc, newline='\r\n') as ft:
-                do_ystb(yenv, yscd, ystb, lbls[scr.id], ft, renc)
+                do_ystb(yenv, yscd, ystb, lbls[scr.id], vinits, ft, renc)
+    # 4. no empty file to put globals, create one
+    if glbs:
+        print('no empty file to put global, writing to data/script/global.yst')
+        makedirs(path.join(odir, 'data/script'), exist_ok=True)
+        with open(path.join(odir, 'data/script/global.yst'), 'w',
+                  encoding=wenc, newline='\r\n') as ft:
+            ft.writelines(glbs)
 
 
-def ysvr_global(yenv: YEnv, ysvr: YSVR, f: TextIOBase, enc: str):
+def ysvr_global(yenv: YEnv, ysvr: YSVR, enc: str):
+    lines: list[str] = []
     com_vars = yenv.com_vars
     cmd_name = {1: 'G_INT', 2: 'G_FLT', 3: 'G_STR'}
     for v in ysvr.vars:
@@ -55,7 +67,23 @@ def ysvr_global(yenv: YEnv, ysvr: YSVR, f: TextIOBase, enc: str):
                 ins_list = Ins.parse_buf(v.val, enc)
                 var_val = '='+yenv.eval(ins_list, enc) if len(ins_list) else ''
             case typ: assert False, 'invalid typ'+str(typ)
-        f.write(f'{var_cmd}[{var_def}{var_dim}{var_val}]\n')
+        lines.append(f'{var_cmd}[{var_def}{var_dim}{var_val}]\n')
+    return lines
+
+
+TVInits = dict[int, int | float | list[Ins]]
+
+
+def ysvr_varinits(yenv: YEnv, ysvr: YSVR, enc: str):
+    com_vars = yenv.com_vars
+    varinits: TVInits = {}
+    for v in ysvr.vars:
+        if (v.var_id in com_vars) or (v.typ == 0):
+            continue  # compiler, non-existent
+        match v.typ:
+            case 1 | 2: varinits[v.var_id] = v.val
+            case 3: varinits[v.var_id] = Ins.parse_buf(v.val, enc)
+    return varinits
 
 
 ASSIGN = {
@@ -67,7 +95,7 @@ ARI = {0: '=', 1: '+=', 2: '-=', 3: '*=', 4: '/=', 5: '%=', 6: '&=', 7: '|=', 8:
 SKIP = {'IFBLEND': 0, 'RETURNCODE': 1}
 
 
-def do_ystb(yenv: YEnv, yscd: YSCD, ystb: YSTB, lbls: list[Lbl], f: TextIOBase, enc: str):
+def do_ystb(yenv: YEnv, yscd: YSCD, ystb: YSTB, lbls: list[Lbl], vinits: TVInits, f: TextIOBase, enc: str):
     # 0. for easy use
     exp_data = ystb.data
     # 1. count all labels
@@ -107,8 +135,8 @@ def do_ystb(yenv: YEnv, yscd: YSCD, ystb: YSTB, lbls: list[Lbl], f: TextIOBase, 
                 line.append('ELSE[]')
             case 'LOOP':  # LOOP: SET=times loopend:L
                 assert narg == 2
-                fuck = str(get_ins(args[0], exp_data, enc))
-                if fuck == '[(u8:-0x1=-1)]':  # depends on Ins.__repr__
+                rhsv = str(get_ins(args[0], exp_data, enc))
+                if rhsv == '[(u8:-0x1=-1)]':  # depends on Ins.__repr__
                     line.append(f'LOOP[]')
                 else:
                     cond = fmt_exp(yenv, args[0], exp_data, True, enc)
@@ -119,8 +147,14 @@ def do_ystb(yenv: YEnv, yscd: YSCD, ystb: YSTB, lbls: list[Lbl], f: TextIOBase, 
                 rhs = fmt_exp(yenv, args[1], exp_data, True, enc)
                 if x != 'LET':
                     assert args[0].ari == 0
-                    fuck = str(get_ins(args[1], exp_data, enc))
-                    if fuck == '[(u64:0x0=0)]':  # depends on Ins.__repr__
+                    lhsi = get_ins(args[0], exp_data, enc)
+                    lhs0 = lhsi[0]
+                    assert (lhs0.op == 'var' and len(lhsi) == 1) or lhs0.op == 'idxbeg'
+                    lhs_varid = lhs0.arg >> 8  # xxxx40/20
+                    str_noinit = vinits.get(lhs_varid) == []
+                    rhsv = str(get_ins(args[1], exp_data, enc))
+                    num_noinit = rhsv == '[(u64:0x0=0)]'  # Ins.__repr__
+                    if str_noinit or num_noinit:  # what about FLT?
                         line.append(f'{x}[{lhs}]')
                     else:
                         line.append(f'{x}[{lhs}={rhs}]')

@@ -317,7 +317,7 @@ class Var:
             case 3:
                 expr_len = r.ui(2)
                 self.val = r.read(expr_len)
-            case x: raise ValueError(f'unknown type: {x}')
+            case x: assert False, f'unknown type: {x}'
 
 
 Tysvr = Struct('<IH')

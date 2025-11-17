@@ -2,7 +2,7 @@
 
 A decompiler for the YU-RIS visual novel engine.  
 (No YPF extraction tool here, you can use others' tool for that)  
-compile(decompile(original)) is almost identical to original ysbin's
+(re)compile(decompile(original)) is almost identical to original  
 
 ## Usage
 
@@ -22,8 +22,8 @@ most are due to the compilation process
 
 - no variable names
 - no macro
-- currently, all globals go into one data/script/global.yst  
-    theoretically it is possible to split them into their respective files, but it just works now.
+- all globals go into the first empty script, or into a created data/script/global.yst
+    (mostly eris/global.yst where they most possibly original stayed)
 
 ## Thank You
 

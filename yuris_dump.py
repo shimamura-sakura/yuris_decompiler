@@ -28,40 +28,44 @@ ASSIGN = {
 
 
 def do_ystb(yscd: YSCD, ystb: YSTB, f: TextIOBase, enc: str):
+    l: list[str] = []
     exp_data = ystb.data
     for pc, cmd in enumerate(ystb.cmds):
         cmd_desc = yscd.cmds[cmd.code]
         cmd_name = cmd_desc.name
-        narg = len(args := cmd.args)
-        f.write(f'L={cmd.line_no} {cmd_desc.name} narg={len(cmd.args)}\n')
+        narg = len(args := cmd.args)  # to compare structure only, comment out PC
+        l.append(f'PC={pc} L={cmd.line_no} {cmd_desc.name} narg={len(cmd.args)}\n')
         match cmd_name:
             case 'RETURNCODE':
-                f.write(f'- code: {do_arg(args[0], exp_data, False, False, enc)}\n')
+                assert narg == 1 and args[0].off == 0  # why .len differs?
+                l.append(f'- code: id={args[0].id} fl={args[0].fl} typ={args[0].typ} ari={args[0].ari}\n')
             case 'IF' | 'ELSE' if narg == 3:
                 assert narg == 3
-                f.write(f'- cond: {do_arg(args[0], exp_data, True, True, enc)}\n')
-                # f.write(f'- then: {do_arg(args[1], exp_data, False, False, enc)}\n')
-                # f.write(f'- else: {do_arg(args[2], exp_data, False, False, enc)}\n')
+                l.append(f'- cond: {do_arg(args[0], exp_data, True, True, enc)}\n')
+                l.append(f'- then: {do_arg(args[1], exp_data, False, False, enc)}\n')
+                l.append(f'- else: {do_arg(args[2], exp_data, False, False, enc)}\n')
             case 'LOOP':
-                f.write(f'- cond: {do_arg(args[0], exp_data, True, True, enc)}\n')
-                # f.write(f'- loop: {do_arg(args[1], exp_data, False, False, enc)}\n')
+                assert narg == 2
+                l.append(f'- cond: {do_arg(args[0], exp_data, True, True, enc)}\n')
+                l.append(f'- loop: {do_arg(args[1], exp_data, False, False, enc)}\n')
             case x if x in ASSIGN:
-                f.write(f'- lhs: {do_arg(args[0], exp_data, True, True, enc)}\n')
-                f.write(f'- rhs: {do_arg(args[1], exp_data, True, True, enc)}\n')
+                l.append(f'- lhs: {do_arg(args[0], exp_data, True, True, enc)}\n')
+                l.append(f'- rhs: {do_arg(args[1], exp_data, True, True, enc)}\n')
             case 'WORD':
-                f.write(do_arg(args[0], exp_data, False, True, enc)+'\n')
+                l.append(do_arg(args[0], exp_data, False, True, enc)+'\n')
             case _:
                 des_args = cmd_desc.args
                 for arg in cmd.args:
                     arg_desc = des_args[arg.id]
                     arg_name = arg_desc.name
-                    f.write(f'{arg_name}: {do_arg(arg, exp_data, False, True, enc)}\n')
+                    l.append(f'{arg_name}: {do_arg(arg, exp_data, False, True, enc)}\n')
+    f.writelines(l)
 
 
 def do_arg(arg: Arg, exp_data: bytes, force_exp: bool, disasm: bool, enc: str):
-    k0 = f'id={arg.id} fl={arg.fl} typ={arg.typ} ari={arg.ari}'
+    k0 = f'id={arg.id} fl={arg.fl} typ={arg.typ} ari={arg.ari} off={arg.off} len={arg.len}'
     if not disasm:
-        return f'{k0} len={arg.len}'
+        return k0
     assert len(raw_data := exp_data[arg.off:arg.off+arg.len]) == arg.len
     if arg.typ == 0 and not force_exp:
         return f'{k0}: {raw_data.decode(enc)}'

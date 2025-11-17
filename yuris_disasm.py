@@ -16,7 +16,8 @@ def disasm(idir: str, odir: str, yscd: YSCD, key: int, renc: str, wenc: str):
     # 1. create env, define global variables -> global.yst
     yenv = YEnv(yscd, ysvr)
     makedirs(path.join(odir, 'data/script'), exist_ok=True)
-    with open(path.join(odir, 'data/script/global.yst'), 'w', encoding=wenc) as ft:
+    with open(path.join(odir, 'data/script/global.yst'), 'w',
+              encoding=wenc, newline='\r\n') as ft:
         ysvr_global(yenv, ysvr, ft, renc)
         # return
     # 2. get labels
@@ -34,7 +35,7 @@ def disasm(idir: str, odir: str, yscd: YSCD, key: int, renc: str, wenc: str):
         out_path = path.join(odir, scr.path.replace('\\', '/'))
         makedirs(path.dirname(out_path), exist_ok=True)
         print(scr.id, out_path)
-        with open(out_path, 'w', encoding=wenc) as ft:
+        with open(out_path, 'w', encoding=wenc, newline='\r\n') as ft:
             do_ystb(yenv, yscd, ystb, lbls[scr.id], ft, renc)
         # break
 
@@ -100,19 +101,31 @@ def do_ystb(yenv: YEnv, yscd: YSCD, ystb: YSTB, lbls: list[Lbl], f: TextIOBase, 
             case x if x in SKIP: assert narg == SKIP[x]
             case 'IF' | 'ELSE' if narg == 3:  # IF/ELIF: cond then else
                 assert narg == 3
-                line.append(f';{cmd_name}[{fmt_exp(yenv, args[0], exp_data, True, enc)}]')
+                line.append(f'{cmd_name}[{fmt_exp(yenv, args[0], exp_data, True, enc)}]')
             case 'ELSE':
                 assert narg == 0
-                line.append(';ELSE[]')
+                line.append('ELSE[]')
             case 'LOOP':  # LOOP: SET=times loopend:L
                 assert narg == 2
-                line.append(f';LOOP[SET={fmt_exp(yenv, args[0], exp_data, True, enc)}]')
+                fuck = str(get_ins(args[0], exp_data, enc))
+                if fuck == '[(u8:-0x1=-1)]':  # depends on Ins.__repr__
+                    line.append(f'LOOP[]')
+                else:
+                    cond = fmt_exp(yenv, args[0], exp_data, True, enc)
+                    line.append(f'LOOP[SET={cond}]')
             case x if x in ASSIGN:  # ASSIGN: lhs ?= rhs
                 assert narg == 2
                 lhs = fmt_exp(yenv, args[0], exp_data, True, enc)
                 rhs = fmt_exp(yenv, args[1], exp_data, True, enc)
-                assign = f'{lhs}{ARI[args[0].ari]}{rhs}'
-                line.append(';'+(assign if x == 'LET' else f'{x}[{assign}]'))
+                if x != 'LET':
+                    assert args[0].ari == 0
+                    fuck = str(get_ins(args[1], exp_data, enc))
+                    if fuck == '[(u64:0x0=0)]':  # depends on Ins.__repr__
+                        line.append(f'{x}[{lhs}]')
+                    else:
+                        line.append(f'{x}[{lhs}={rhs}]')
+                else:
+                    line.append(f'{lhs}{ARI[args[0].ari]}{rhs}')
             case 'WORD':
                 assert len(args) == 1
                 w = args[0]
@@ -131,12 +144,13 @@ def do_ystb(yenv: YEnv, yscd: YSCD, ystb: YSTB, lbls: list[Lbl], f: TextIOBase, 
                         cmd_segs.append(arg_exp)
                     else:
                         cmd_segs.append(arg_name+ARI[arg.ari]+arg_exp)
-                line.append(f';{cmd_name}[{' '.join(cmd_segs)}]')
-    # 3. write lines, no space between two word segs
-    for line in lines:
+                line.append(f'{cmd_name}[{' '.join(cmd_segs)}]')
+    # 3. write lines
+    nl = len(lines)-1
+    for il, line in enumerate(lines):
         if line:
-            f.writelines(line)
-        f.write('\n')
+            f.write(';'.join(line))
+        f.write('\n') if il < nl else None
 
 
 def fmt_exp(yenv: YEnv, arg: Arg, exp_data: bytes, force_exp: bool, enc: str):
@@ -145,6 +159,11 @@ def fmt_exp(yenv: YEnv, arg: Arg, exp_data: bytes, force_exp: bool, enc: str):
         return repr(raw_data.decode(enc))
     ins_list = Ins.parse_buf(raw_data, enc)
     return yenv.eval(ins_list, enc)
+
+
+def get_ins(arg: Arg, exp_data: bytes, enc: str):
+    assert len(raw_data := exp_data[arg.off:arg.off+arg.len]) == arg.len
+    return Ins.parse_buf(raw_data, enc)
 
 
 __all__ = ['disasm']

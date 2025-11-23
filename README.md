@@ -8,6 +8,8 @@ Now also with a YPF extractor.
 Supports versions from 0.247 to 0.494  
 Currently missing YSCFG (yscfg.ybn) format.
 
+Dependency: `pip install murmurhash2` for YPF extracting
+
 # Usage
 
 Currently there are no commandline interface or gui, you need to call it by code.  

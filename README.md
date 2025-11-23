@@ -1,5 +1,7 @@
 # YU-RIS Decompiler
 
+[the version before rewrite](https://github.com/shimamura-sakura/yuris_decompiler/tree/400654a261cf93629a6271cd164fb7a854badfc7)
+
 A decompiler for the Yu-Ris game engine.  
 (It's visual novel part is called E-Ris, which is written in Yu-Ris script itself)  
 Now also with a YPF extractor.  

@@ -123,16 +123,16 @@ def do_ystb(yenv: YEnv, scr_idx: int, ystb: YSTB, f: TextIO):
         assert cmd.lno >= prev_lno, 'lno not increasing!'
         lidx = cmd.lno-1
         curline = lines[lidx]
-        if (off_lbls := lbls.get(cmd.off)):
-            del lbls[cmd.off]
-            lbliter = ('#'+name for name in off_lbls)
-            if lidx == 0 or len(prevline := lines[lidx-1]):
-                curline.extend(lbliter)
-            else:
-                prevline.extend(lbliter)
         if len(preps):
             curline.extend(preps)
             preps.clear()
+        if (off_lbls := lbls.get(cmd.off)):
+            del lbls[cmd.off]
+            lbliter = ('#'+name for name in off_lbls)
+            if len(curline) or lidx == 0 or len(prevline := lines[lidx-1]):
+                curline.extend(lbliter)
+            else:
+                prevline.extend(lbliter)
         cmd_name, arg_names = yenv.cmds[cmd.code]
         args = cmd.args
         narg = len(args)

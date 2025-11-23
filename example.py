@@ -19,6 +19,11 @@ with open('example-files/v255.ycd', 'rb') as fp:
 # use KEY_200 for v200-v289
 y_decompile('example-files/v255/ysbin', 'example-out/v255', yscd, KEY_200)
 
+# it can also work without YSCom, but compiler vars are needed to be fixed manually
+# other encodings can be used for output, but sources will not be able to be compiled by YSCom
+y_decompile('example-files/v255/ysbin', 'example-out/v255-no_yscom', None, KEY_200,
+            o_encoding='utf-8')
+
 with open('example-files/v494.ycd', 'rb') as fp:
     yscd = YSCD(Rdr(fp.read()))
 

@@ -296,7 +296,7 @@ class Lbl:
     def __init__(self, r: Rdr):
         self.name = r.str(r.byte())
         self.id, self.ip, self.scr_idx, self.unk = r.unpack(SLbl)
-        assert self.unk in (0, 1, 256)  # TODO: what's this?
+        assert self.unk in (0, 1, 256) # TODO:?
 
 
 class YSLB:
@@ -762,9 +762,9 @@ class YSTB:
             f.write(f'[{i}] off={cmd.off} lno={cmd.lno} unk={cmd.unk} {code}:{desc.name}\n')
             match code:
                 case kcc.IF | kcc.ELSE if len(args) == 3:
-                    f.write('- cond: '+repr(args[0])+'\n')
-                    f.write('- then: '+repr(args[1])+'\n')
-                    f.write('- else: '+repr(args[2])+'\n')
+                    f.write('-  cond: '+repr(args[0])+'\n')
+                    f.write('-  else: '+repr(args[1])+'\n')
+                    f.write('- ifend: '+repr(args[2])+'\n')
                     continue
                 case kcc.LOOP:
                     f.write('- count: '+repr(args[0])+'\n')

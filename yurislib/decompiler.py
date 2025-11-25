@@ -2,7 +2,7 @@ from .fileformat import *
 
 
 class YEnv:
-    __slots__ = ['ver', 'vars', 'lbls', 'cmds', 'vtyq', 'ysvr', 'global_yst']
+    __slots__ = ['ver', 'vars', 'lbls', 'cmds', 'vtyq', 'ysvr', 'global_yst', 'to_new_tostr']
     ver: int
     vars: list[str | None]  # Nones are non-existent comvars and locals
     lbls: defdict[int, defdict[int, list[str]]]  # scr_idx -> offset -> name[]
@@ -10,8 +10,9 @@ class YEnv:
     vtyq: dict[int, str]
     ysvr: YSVR
     global_yst: str | None
+    to_new_tostr: bool
 
-    def __init__(self, yscd: YSCD | None, ysvr: YSVR, yslb: YSLB, *, yscm: YSCM | None = None):
+    def __init__(self, yscd: YSCD | None, ysvr: YSVR, yslb: YSLB, yscm: YSCM, *, to_new_tostr: bool = False):
         assert (ver := ysvr.ver) == yslb.ver, f'version mismatch: ysvr:{ver}, yslb:{yslb.ver}'
         max_vidx = max(v.var_idx for v in ysvr.vars)
         vars: list[str | None] = [None] * (max_vidx+1)
@@ -19,7 +20,10 @@ class YEnv:
         self.cmds = []
         self.vars = vars
         self.ysvr = ysvr
+        self.to_new_tostr = to_new_tostr
         cmds = self.cmds
+        for c in yscm.cmds:
+            cmds.append((c.name, list(a.name for a in c.args)))
         if yscd:
             # assert ver == yscd.ver, f'version mismatch: ysvr:{ver}, yscd:{yscd.ver}'
             for i, v in enumerate(yscd.vars):
@@ -33,13 +37,9 @@ class YEnv:
                     dvar = yscd.vars[i]
                     assert v.typ == dvar.typ, f'#{i} ysvr.typ={v.typ} yscd({dvar.name}).typ={dvar.typ}'
                     assert v.dim == dvar.dim, f'#{i} ysvr.dim={v.dim} yscd({dvar.name}).dim={dvar.dim}'
-            for c in yscd.cmds:
-                cmds.append((c.name, list(a.name for a in c.args)))
         else:  # fill in dummy names with ysvr
             assert yscm, f'when no yscd, yscm must be provided'
             assert ver == yscm.ver, f'version mismatch: ysvr:{ver}, yscd:{yscm.ver}'
-            for c in yscm.cmds:
-                cmds.append((c.name, list(a.name for a in c.args)))
             for v in ysvr.vars:
                 if v.var_idx >= VarUsrMi or (typ := v.typ) == 0:  # non-existent
                     continue
@@ -49,7 +49,7 @@ class YEnv:
             case v if Vmi <= v < 300:
                 self.vtyq = InsTyqV200
                 lbl_pc_to_off = False
-                emit_global_txt = False
+                emit_global_txt = v == 290  # 290 is half-new, half-old
             case v if 300 <= v < Vma:
                 self.vtyq = InsTyqV300
                 lbl_pc_to_off = True
@@ -105,7 +105,7 @@ class YEnv:
         return ret
 
     def dat_to_argstr(self, lst: list[Ins]):
-        tree = Ins.list_to_tree(lst, self.ins_get_var)
+        tree = Ins.list_to_tree(lst, self.ins_get_var, self.to_new_tostr)
         tstr = Ins.tree_to_str(tree)
         return '('+tstr+')' if tree[0] == '&' and len(tree) == 3 else tstr
 
@@ -205,16 +205,18 @@ def do_ystb(yenv: YEnv, scr_idx: int, ystb: YSTB, f: TextIO):
 
 
 def decompile(idir: str, odir: str, yscd: YSCD | None, ystb_key: int, *,
-              i_encoding: str = CP932, o_encoding: str = CP932):
+              i_encoding: str = CP932, o_encoding: str = CP932,
+              to_new_tostr: bool = False, yscm: YSCM | None = None):
     with open(path.join(idir, 'ysv.ybn'), 'rb') as fp:
         ysvr = YSVR(Rdr(fp.read(), enc=i_encoding))
     with open(path.join(idir, 'ysl.ybn'), 'rb') as fp:
         yslb = YSLB(Rdr(fp.read(), enc=i_encoding))
-    with open(path.join(idir, 'ysc.ybn'), 'rb') as fp:
-        yscm = YSCM(Rdr(fp.read(), enc=i_encoding))
+    if not yscm:
+        with open(path.join(idir, 'ysc.ybn'), 'rb') as fp:
+            yscm = YSCM(Rdr(fp.read(), enc=i_encoding))
     with open(path.join(idir, 'yst_list.ybn'), 'rb') as fp:
         ystl = YSTL(Rdr(fp.read(), enc=i_encoding))
-    yenv = YEnv(yscd, ysvr, yslb, yscm=yscm)
+    yenv = YEnv(yscd, ysvr, yslb, yscm, to_new_tostr=to_new_tostr)
     glbs = yenv.global_yst
     for scr in ystl.scrs:
         out_path = path.join(odir, scr.path.replace('\\', '/'))

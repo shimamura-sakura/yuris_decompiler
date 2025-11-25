@@ -1,11 +1,12 @@
 #!/bin/env python3
 from __future__ import annotations
+import json
 from sys import stdout
 from os import makedirs, path
 from struct import Struct as St
 from murmurhash2 import murmurhash2 as _mmh2
 from collections import defaultdict as defdict
-from typing import Callable, BinaryIO, TextIO, Literal
+from typing import Callable, BinaryIO, TextIO, Literal, Any
 from zlib import crc32 as _crc32, adler32 as _adl32, decompress
 Vmi, Vma = 200, 501  # supports Vmi=..<Vma
 def goodver(v: int): return Vmi <= v < Vma
@@ -296,7 +297,7 @@ class Lbl:
     def __init__(self, r: Rdr):
         self.name = r.str(r.byte())
         self.id, self.ip, self.scr_idx, self.unk = r.unpack(SLbl)
-        assert self.unk in (0, 1, 256) # TODO:?
+        assert self.unk in (0, 1, 256)  # TODO:?
 
 
 class YSLB:
@@ -462,9 +463,11 @@ class YSVR:
         self.dic = {v.var_idx: v for v in self.vars}
         r.assert_eof(ver)
 
-    def print(self, f: TextIO):
+    def print(self, f: TextIO, *, sys_only: bool = False):
         f.write(f'YSVR ver={self.ver} nvar={len(self.vars)}\n')
         for i, v in enumerate(self.vars):
+            if sys_only and i >= VarUsrMi:
+                break
             f.write(f'[{i}]: var_idx={v.var_idx} scope={v.scope} g_ext={v.g_ext} '
                     f'scr_idx={v.scr_idx} dims={v.dim} init={v.initv}\n')
 
@@ -510,6 +513,32 @@ class DVar:
         assert 1 <= self.typ <= 3
         self.dim = [r.ui(4) for _ in range(ndim)]
 
+    @staticmethod
+    def list_to_json(lst: list[DVar]) -> str:
+        lines: list[str] = []
+        for v in lst:
+            lines.append(json.dumps((v.name, v.typ, v.dim)))
+        return '[\n'+',\n'.join(lines) + ',\nnull\n]'
+
+    @classmethod
+    def from_tuple(cls, obj: Any):  # type: ignore
+        assert isinstance(obj, (list, tuple))
+        name, typ, dim, *_ = obj  # type: ignore
+        assert isinstance(name, str) and len(name) > 0
+        assert isinstance(typ, int) and 1 <= typ <= 3
+        assert isinstance(dim, list)
+        assert all(isinstance(d, int) for d in dim)  # type: ignore
+        c = cls.__new__(cls)
+        c.name = name
+        c.typ = typ
+        c.dim = dim
+        return c
+
+    @classmethod
+    def list_from_json(cls, obj: Any):  # type: ignore
+        assert isinstance(obj, (list, tuple))
+        return [cls.from_tuple(v) for v in obj[:-1]]  # type: ignore
+
 
 class YSCD:
     __slots__ = ['ver', 'cmds', 'vars', 'errs', 'estr', 'blok', 'b800']
@@ -543,12 +572,18 @@ class YSCD:
         r.assert_eof(ver)
 
     def print(self, f:  TextIO = stdout):
-        f.write('- COMMANDS -\n')
+        f.write(f'YSCD ver={self.ver}\n')
+        f.write(f'- COMMANDS ncmd={len(self.cmds)}-\n')
         for i, c in enumerate(self.cmds):
             f.write(f'[{i}]C:{c.name}\n')
             for j, a in enumerate(c.args):
                 f.write(f'\t[{i}][{j:2}]A:{a.name:10} unk={a.u2} typ={a.typ} val={a.val}\n')
-        f.write('- VARS -\n')
+        f.write(f'- VARS nvar={len(self.vars)} -\n')
+        for i, v in enumerate(self.vars):
+            f.write(f'[{i}]V:{v.name} typ={v.typ}, dim={v.dim}\n')
+
+    def print_vars(self, f: TextIO):
+        f.write(f'YSCD vars ver={self.ver} nvar={len(self.vars)}\n')
         for i, v in enumerate(self.vars):
             f.write(f'[{i}]V:{v.name} typ={v.typ}, dim={v.dim}\n')
 
@@ -883,7 +918,7 @@ class Ins:
         return e
 
     @staticmethod
-    def list_to_tree(lst: list[Ins], var_name: Callable[[int], str]) -> InsTree:
+    def list_to_tree(lst: list[Ins], var_name: Callable[[int], str], to_new_tostr: bool) -> InsTree:
         stk: list[InsTree | None] = []  # None as idxbeg marker
         for ins in lst:
             arg = ins.arg
@@ -900,7 +935,11 @@ class Ins:
                     stk.append((op, arg))
                 case 'var':
                     assert isinstance(arg, int)
-                    stk.append((op, var_name(arg)))
+                    v = var_name(arg)
+                    if to_new_tostr and v.startswith('$@'):
+                        stk.append(('$', (op, v[1:])))
+                    else:
+                        stk.append((op, var_name(arg)))
                 case 'arr':
                     assert isinstance(arg, int)
                     stk.append((op, var_name(arg)+'()'))
@@ -912,8 +951,11 @@ class Ins:
                     idxs: list[InsTree] = []
                     while (item := stk.pop()):
                         idxs.append(item)
-                    assert (idx := stk[-1]) and idx[0] == 'idx'
+                    assert (idx := stk[-1]) and idx[0] == 'idx'  # type: ignore
                     idx[2].extend(reversed(idxs))  # type: ignore
+                    assert isinstance(v := idx[1], str)
+                    if to_new_tostr and v.startswith('$@'):
+                        stk[-1] = ('$', ('idx', v[1:], idx[2]))  # type: ignore
                 case 'neg' | '$' | '@':
                     assert (item := stk.pop())
                     stk.append((op, item))

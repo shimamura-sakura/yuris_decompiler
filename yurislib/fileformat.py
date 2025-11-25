@@ -547,7 +547,7 @@ class YSCD:
         for i, c in enumerate(self.cmds):
             f.write(f'[{i}]C:{c.name}\n')
             for j, a in enumerate(c.args):
-                f.write(f'\t[{i}][{j}]A:{a.name} unk={a.u2} typ={a.typ} val={a.val}\n')
+                f.write(f'\t[{i}][{j:2}]A:{a.name:10} unk={a.u2} typ={a.typ} val={a.val}\n')
         f.write('- VARS -\n')
         for i, v in enumerate(self.vars):
             f.write(f'[{i}]V:{v.name} typ={v.typ}, dim={v.dim}\n')

@@ -59,6 +59,7 @@ Cmd[]
 // - expr_offset equals to their branch target's first arg data offset
 //   - if no target, equals to the current position of expr_data (increasing)
 // - IF/ELSE(= else if): elif, ifend; LOOP: loopend
+// Sometimes for var def commands's second arg (LVal), type doesn't match, idk why
 ```
 
 V300

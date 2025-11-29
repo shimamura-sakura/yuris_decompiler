@@ -38,7 +38,6 @@ class YEnv:
                     assert v.typ == dvar.typ, f'#{i} ysvr.typ={v.typ} yscd({dvar.name}).typ={dvar.typ}'
                     assert v.dim == dvar.dim, f'#{i} ysvr.dim={v.dim} yscd({dvar.name}).dim={dvar.dim}'
         else:  # fill in dummy names with ysvr
-            assert yscm, f'when no yscd, yscm must be provided'
             assert ver == yscm.ver, f'version mismatch: ysvr:{ver}, yscd:{yscm.ver}'
             for v in ysvr.vars:
                 if v.var_idx >= VarUsrMi or (typ := v.typ) == 0:  # non-existent

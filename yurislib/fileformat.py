@@ -190,7 +190,7 @@ class MArg:
     __slots__ = ['name', 'typ', 'chk']
     name: str
     typ: int  # 0:Any 1:Int 2:Flt 3:Str
-    chk: int
+    chk: int  # TODO: meaning?
 
     def __init__(self, r: Rdr):
         self.name = r.sz()
@@ -282,22 +282,22 @@ class YSER:
 
 
 SYslHead = U32x3
-SLbl = St('<IIHH')
+SLbl = St('<IIHBB')
 YslMagic = magic(b'YSLB')
 
 
 class Lbl:
-    __slots__ = ['name', 'id', 'ip', 'scr_idx', 'unk']
+    __slots__ = ['name', 'id', 'ip', 'scr_idx', 'if_lvl', 'loop_lvl']
     name: str
     id: int
     ip: int  # 200-300:offset, 300-500:index
     scr_idx: int
-    unk: int
+    if_lvl: int
+    loop_lvl: int
 
     def __init__(self, r: Rdr):
         self.name = r.str(r.byte())
-        self.id, self.ip, self.scr_idx, self.unk = r.unpack(SLbl)
-        assert self.unk in (0, 1, 256)  # TODO:?
+        self.id, self.ip, self.scr_idx, self.if_lvl, self.loop_lvl = r.unpack(SLbl)
 
 
 class YSLB:
@@ -317,7 +317,8 @@ class YSLB:
     def print(self, f: TextIO):
         f.write(f'YSLB ver={self.ver} nlbl={len(self.lbls)}\n')
         for i, l in enumerate(self.lbls):
-            f.write(f'[{i}] name={l.name} id={l.id} ip={l.ip} scr_idx={l.scr_idx} unk={l.unk}\n')
+            f.write(f'[{i:3}] name={l.name:<10} id={l.id:0>8x} ip={l.ip} '
+                    f'scr_idx={l.scr_idx} if={l.if_lvl} loop={l.loop_lvl}\n')
 
 
 YstMagic = magic(b'YSTD')
@@ -340,7 +341,7 @@ class YSTD:
 SYtlHead = U32x3
 YtlMagic = magic(b'YSTL')
 SScrV200 = St('<Q2i')
-SScrV300 = St('<Q3i')
+SScrV470 = St('<Q3i')
 
 
 class Scr:
@@ -368,7 +369,7 @@ class Scr:
         s.idx, path_len = r.unpack(U32x2)
         assert s.idx == i
         s.path = r.str(path_len)
-        s.time, s.nvar, s.nlbl, s.ntext = r.unpack(SScrV300)
+        s.time, s.nvar, s.nlbl, s.ntext = r.unpack(SScrV470)
         return s
 
 
@@ -398,7 +399,7 @@ class YSTL:
 VarUsrMi = 1000
 SYsvHead = St('<IIH')
 SVarV000 = St('<B HHBB')  # G_{TYP}
-SvarV455 = St('<BBHHBB')  # G_{TYP}x
+SvarV481 = St('<BBHHBB')  # G_{TYP}x
 YsvMagic = magic(b'YSVR')
 
 
@@ -422,7 +423,7 @@ class Var:
     @classmethod
     def initV481(cls, r: Rdr):
         v = cls()
-        v.scope, v.g_ext, v.scr_idx, v.var_idx, typ, ndim = r.unpack(SvarV455)
+        v.scope, v.g_ext, v.scr_idx, v.var_idx, typ, ndim = r.unpack(SvarV481)
         return v._dims_initv(r, typ, ndim)
 
     def _dims_initv(self, r: Rdr, typ: int, ndim: int):
@@ -477,9 +478,9 @@ YcdMagic = magic(b'YSCD')
 
 
 class DArg:
-    __slots__ = ['name', 'u2', 'typ', 'val']
+    __slots__ = ['name', 'unk2', 'typ', 'val']
     name: str
-    u2: tuple[int, int]
+    unk2: tuple[int, int]  # TODO: meaning?
     typ: int
     val: int
 
@@ -487,7 +488,7 @@ class DArg:
         self.name = r.sz()
         u0, u1, self.typ, self.val = tuple(r.read(4))
         assert self.typ <= 3
-        self.u2 = (u0, u1)
+        self.unk2 = (u0, u1)
 
 
 class DCmd:
@@ -577,10 +578,16 @@ class YSCD:
         for i, c in enumerate(self.cmds):
             f.write(f'[{i}]C:{c.name}\n')
             for j, a in enumerate(c.args):
-                f.write(f'\t[{i}][{j:2}]A:{a.name:10} unk={a.u2} typ={a.typ} val={a.val}\n')
+                f.write(f'\t[{i}][{j:2}]A:{a.name:10} unk={a.unk2} typ={a.typ} val={a.val}\n')
         f.write(f'- VARS nvar={len(self.vars)} -\n')
         for i, v in enumerate(self.vars):
             f.write(f'[{i}]V:{v.name} typ={v.typ}, dim={v.dim}\n')
+        f.write(f'- ERRS nerr={len(self.errs)} -\n')
+        for i, e in enumerate(self.errs):
+            f.write(f'[{i}]E id={e.id} msg={repr(e.msg)}\n')
+        f.write(f'- ESTR nestr={len(self.estr)} -\n')
+        for i, e in enumerate(self.estr):
+            f.write(f'[{i}]S {repr(e)}\n')
 
     def print_vars(self, f: TextIO):
         f.write(f'YSCD vars ver={self.ver} nvar={len(self.vars)}\n')
@@ -590,7 +597,8 @@ class YSCD:
 
 SYtbHead = U32x8
 SArg = St('<HBBII')
-SCmdV200 = St('<BBI')
+SArgHead = St('<HBB')
+SCmdV200 = St('<BBI')  # code, narg, lineno
 SCmdV300 = St('<BBH')
 SArgR2xx = St('<HBB')
 SArgR290 = St('<HBBI')
@@ -616,7 +624,7 @@ AssignOp = ['=', '+=', '-=',  '*=',  '/=',  '%=',  '&=',  '|=',  '^=']
 class Arg:
     __slots__ = ['id', 'typ', 'aop', 'len', 'off', 'dat']
     id: int
-    typ: int  # 7-3:? 21:type
+    typ: int  # 7-3:TODO:meaning? 21:type; TODO:meaning for vardef cmds?
     aop: int  # assignment op
     len: int
     off: int
@@ -641,6 +649,7 @@ class Arg:
         else:
             dat = dat[off:off+siz]
             assert len(dat) == siz
+            # print(*map(hex, dat))
             a.dat = Ins.parse_buf(dat, r.enc)
         return a
 
@@ -676,18 +685,18 @@ class Arg:
 
 
 class Cmd:
-    __slots__ = ['off', 'lno', 'code', 'args', 'unk']
+    __slots__ = ['off', 'lno', 'code', 'args', 'npar']
     off: int
     lno: int
     code: int
     args: list[Arg]
-    unk: int
+    npar: int  # V300: for gosub, return: parameter count (PINT, PSTR)
 
     @classmethod
     def initV2xx(cls, r: Rdr, dat: bytes, kcc: KnownCmdCode):
         c = cls()
         c.off = r.idx
-        c.unk = 0
+        c.npar = 0
         code, narg, c.lno = r.unpack(SCmdV200)
         c.code = code
         if code != kcc.RETURNCODE:
@@ -700,7 +709,7 @@ class Cmd:
     def initV290(cls, r: Rdr, dat: bytes, kcc: KnownCmdCode):
         c = cls()
         c.off = r.idx
-        c.unk = 0
+        c.npar = 0
         code, narg, c.lno = r.unpack(SCmdV200)
         c.code = code
         if code != kcc.RETURNCODE:
@@ -714,7 +723,7 @@ class Cmd:
         c = cls()
         c.off = r.idx
         c.lno = rLno.ui(4)
-        code, narg, c.unk = r.unpack(SCmdV300)
+        code, narg, c.npar = r.unpack(SCmdV300)
         c.code = code
         if code != kcc.RETURNCODE:
             return c._initArgs(rArg, narg, dat, kcc)
@@ -794,7 +803,7 @@ class YSTB:
             args = cmd.args
             desc = cmds[cmd.code]
             darg = desc.args
-            f.write(f'[{i}] off={cmd.off} lno={cmd.lno} unk={cmd.unk} {code}:{desc.name}\n')
+            f.write(f'[{i}] off={cmd.off} lno={cmd.lno} npar={cmd.npar} {code}:{desc.name}\n')
             match code:
                 case kcc.IF | kcc.ELSE if len(args) == 3:
                     f.write('-  cond: '+repr(args[0])+'\n')
@@ -819,7 +828,7 @@ SIns = St('<BH')
 InsList: dict[int, tuple[int, str]] = {
     0x2C: (0, 'nop'),  # between indices
     # lval
-    0x48: (3, 'var'),
+    0x48: (3, 'var'),  # @x, $x, &@x, &$x, $@x
     0x76: (3, 'arr'),
     0x56: (3, 'idxbeg'),
     0x29: (1, 'idxend'),  # -> 'idx'
@@ -858,7 +867,7 @@ InsList: dict[int, tuple[int, str]] = {
     0x7C: (0, '||'),
 }
 
-
+TypToTyq = [0, 0x40, 0x40, 0x24]
 InsTyq = {0x24: '$', 0x40: '@'}
 InsTyqV200 = {0x23: '$@', **InsTyq}
 InsTyqV300 = {0x23: '&$', **InsTyq, 0x60: '&@'}
@@ -882,14 +891,27 @@ DefCmdTyp = {
 
 
 class Ins:
-    __slots__ = ['op', 'arg']
+    __slots__ = ['op', 'arg', 'code', 'size']
     op: str
+    code: int
+    size: int
     arg: None | int | float | str
     # var 2xx: 23:$@, 24:$, 40:@
     # var 3xx: 23:&$, 24:$, 40:@, 60:&@
 
+    def to_bytes(self):
+        match self.code:
+            case 0x46: return b'\x46\x08\x00' + F64.pack(self.arg)
+            case 0x4d: assert False, 'encode it yourself'
+            case code if self.arg == None: return SIns.pack(code, self.size)
+            case code:
+                assert isinstance(arg := self.arg, int)
+                return SIns.pack(code, self.size) + arg.to_bytes(self.size, 'little', signed=True)
+
     def __init__(self, r: Rdr):
         code, size = r.unpack(SIns)
+        self.code = code
+        self.size = size
         dsiz, self.op = InsList[code]
         assert dsiz < 0 or dsiz == size
         match code:
@@ -953,7 +975,7 @@ class Ins:
                         idxs.append(item)
                     assert (idx := stk[-1]) and idx[0] == 'idx'  # type: ignore
                     idx[2].extend(reversed(idxs))  # type: ignore
-                    assert isinstance(v := idx[1], str)
+                    assert isinstance(v := idx[1], str)  # type: ignore
                     if to_new_tostr and v.startswith('$@'):
                         stk[-1] = ('$', ('idx', v[1:], idx[2]))  # type: ignore
                 case 'neg' | '$' | '@':

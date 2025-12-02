@@ -393,7 +393,7 @@ class YSTL:
     def print(self, f: TextIO):
         f.write(f'YSTL ver={self.ver} nscr={len(self.scrs)}\n')
         for i, s in enumerate(self.scrs):
-            f.write(f'[{i}] idx={s.idx} path={s.path} time={s.time} nvar={s.nvar} nlbl={s.nlbl} ntext={s.ntext}\n')
+            f.write(f'[{i:>3}] idx={s.idx:<3} path={s.path} time={s.time} nvar={s.nvar} nlbl={s.nlbl} ntext={s.ntext}\n')
 
 
 VarUsrMi = 1000
@@ -635,7 +635,10 @@ class Arg:
         return AssignOp[self.aop]
 
     def __repr__(self):
-        return f'id={self.id} typ={self.typ:0>2x} aop={self.aop}({self.aop_str}) len={self.len} off={self.off}: {self.dat}'
+        if self.dat is None:
+            return f'id={self.id} typ={self.typ:0>2x} aop={self.aop}({self.aop_str}) len={self.len} off={self.off}'
+        else:
+            return f'id={self.id} typ={self.typ:0>2x} aop={self.aop}({self.aop_str}): {self.dat}'
 
     @classmethod
     def initV0(cls, r: Rdr, dat: None | bytes = None):
@@ -803,7 +806,8 @@ class YSTB:
             args = cmd.args
             desc = cmds[cmd.code]
             darg = desc.args
-            f.write(f'[{i}] off={cmd.off} lno={cmd.lno} npar={cmd.npar} {code}:{desc.name}\n')
+            # f.write(f'[{i}] off={cmd.off} lno={cmd.lno} npar={cmd.npar} {code}:{desc.name}\n')
+            f.write(f'[{i}] off={cmd.off} npar={cmd.npar} {code}:{desc.name}\n')
             match code:
                 case kcc.IF | kcc.ELSE if len(args) == 3:
                     f.write('-  cond: '+repr(args[0])+'\n')
@@ -876,9 +880,7 @@ ScopeChar = ['', 'g', 's', 'f']
 TypDefCmd = ['', 'INT', 'FLT', 'STR']
 TypName = ['', 'Int', 'Flt', 'Str']
 TypChar = ['', '@', '@', '$']  # 1:Int 2:Flt 3:Num
-InsLeaf = tuple[Literal['i8', 'i16', 'i32', 'i64'], int] \
-    | tuple[Literal['str'], str] \
-    | tuple[Literal['f64'], float] \
+InsLeaf = tuple[Literal['i8', 'i16', 'i32', 'i64', 'str', 'f64'], str] \
     | tuple[Literal['var', 'arr'], str] \
     | tuple[Literal['idx'], str, list['InsTree']]
 InsTree = InsLeaf | tuple[str, 'InsTree'] | tuple[str, 'InsTree', 'InsTree']
@@ -923,7 +925,7 @@ class Ins:
         if (a := self.arg) == None:
             return self.op
         if isinstance(a, str):
-            return f'({self.op}:{a})'
+            return f'({self.op}:{a[1:-1]})'
         if isinstance(a, int):
             if self.op in ('idxbeg', 'arr', 'var'):
                 return f'({self.op}:{a & 0xff:0>2x}:{a >> 8})'
@@ -940,7 +942,10 @@ class Ins:
         return e
 
     @staticmethod
-    def list_to_tree(lst: list[Ins], var_name: Callable[[int], str], to_new_tostr: bool) -> InsTree:
+    def list_to_tree(lst: list[Ins],
+                     map_val: Callable[[int | str | float], str],
+                     var_name: Callable[[int], str],
+                     to_new_tostr: bool) -> InsTree:
         stk: list[InsTree | None] = []  # None as idxbeg marker
         for ins in lst:
             arg = ins.arg
@@ -948,13 +953,13 @@ class Ins:
                 case 'nop': pass
                 case 'str':
                     assert isinstance(arg, str)
-                    stk.append((op, arg))
+                    stk.append((op, map_val(arg)))
                 case 'f64':
                     assert isinstance(arg, float)
-                    stk.append((op, arg))
+                    stk.append((op, map_val(arg)))
                 case  'i8' | 'i16' | 'i32' | 'i64':
                     assert isinstance(arg, int)
-                    stk.append((op, arg))
+                    stk.append((op, map_val(arg)))
                 case 'var':
                     assert isinstance(arg, int)
                     v = var_name(arg)

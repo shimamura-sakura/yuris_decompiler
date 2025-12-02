@@ -38,7 +38,7 @@ class YEnv:
                     assert v.typ == dvar.typ, f'#{i} ysvr.typ={v.typ} yscd({dvar.name}).typ={dvar.typ}'
                     assert v.dim == dvar.dim, f'#{i} ysvr.dim={v.dim} yscd({dvar.name}).dim={dvar.dim}'
         else:  # fill in dummy names with ysvr
-            assert ver == yscm.ver, f'version mismatch: ysvr:{ver}, yscd:{yscm.ver}'
+            assert ver == yscm.ver, f'version mismatch: ysvr:{ver}, yscm:{yscm.ver}'
             for v in ysvr.vars:
                 if v.var_idx >= VarUsrMi or (typ := v.typ) == 0:  # non-existent
                     continue
@@ -104,7 +104,7 @@ class YEnv:
         return ret
 
     def dat_to_argstr(self, lst: list[Ins]):
-        tree = Ins.list_to_tree(lst, self.ins_get_var, self.to_new_tostr)
+        tree = Ins.list_to_tree(lst, str, self.ins_get_var, self.to_new_tostr)
         tstr = Ins.tree_to_str(tree)
         return '('+tstr+')' if tree[0] == '&' and len(tree) == 3 else tstr
 
